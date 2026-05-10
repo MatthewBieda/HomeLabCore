@@ -11,7 +11,9 @@ provider "libvirt" {
 }
 
 resource "libvirt_volume" "disk" {
-  name = "${var.vm_name}.qcow2"
+  for_each = var.vms
+
+  name = "tf-${each.key}.qcow2"
   pool = "default"
   target = {
     format = {
@@ -26,11 +28,13 @@ resource "libvirt_volume" "disk" {
 }
 
 resource "libvirt_domain" "vm" {
-  name        = var.vm_name
+  for_each = var.vms
+
+  name        = "tf-${each.key}"
   type        = "kvm"
-  memory      = var.memory
+  memory      = each.value.memory
   memory_unit = "MiB"
-  vcpu        = var.vcpu
+  vcpu        = each.value.vcpu
   running     = true
 
   os = {
@@ -51,7 +55,7 @@ resource "libvirt_domain" "vm" {
         }
         source = {
           file = {
-            file = libvirt_volume.disk.path
+            file = libvirt_volume.disk[each.key].path
           }
         }
         target = {
@@ -60,7 +64,6 @@ resource "libvirt_domain" "vm" {
         }
       }
     ]
-
     interfaces = [
       {
         model = {
@@ -81,17 +84,22 @@ resource "libvirt_domain" "vm" {
 }
 
 data "libvirt_domain_interface_addresses" "vm" {
-  domain = libvirt_domain.vm.name
+  for_each = var.vms
+
+  domain = libvirt_domain.vm[each.key].name
   source = "lease"
 }
 
-output "vm_ip" {
-  value = data.libvirt_domain_interface_addresses.vm.interfaces[0].addrs[0].addr
+output "vm_ips" {
+  value = {
+    for k, v in data.libvirt_domain_interface_addresses.vm :
+    k => v.interfaces[0].addrs[0].addr
+  }
 }
 
 resource "local_file" "ansible_inventory" {
   content = templatefile("${path.module}/inventory.tpl", {
-    ip           = data.libvirt_domain_interface_addresses.vm.interfaces[0].addrs[0].addr
+    vms          = { for k, v in data.libvirt_domain_interface_addresses.vm : k => v.interfaces[0].addrs[0].addr }
     ansible_user = var.ansible_user
   })
   filename = "${path.module}/../ansible/inventory.ini"

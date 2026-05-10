@@ -1,13 +1,9 @@
-variable "vm_name" {
-  default = "tf-vm1"
-}
-
-variable "memory" {
-  default = 2048
-}
-
-variable "vcpu" {
-  default = 2
+variable "vms" {
+  default = {
+    master = { memory = 2048, vcpu = 2 }
+    worker1 = { memory = 2048, vcpu = 2 }
+    worker2 = { memory = 2048, vcpu = 2 }
+  }
 }
 
 variable "base_image_path" {
